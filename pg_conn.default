@@ -1,0 +1,6 @@
+# the connection to the PostGIS database
+PGHOST=10.8.244.39
+PGPORT=5432
+PGUSER=cdr
+PGDATABASE=eo_cdr_main
+PGSCHEMA=burundi_iom

@@ -1,0 +1,26 @@
+#
+# shell utilities
+#
+# @author: pcampalani
+
+# Tells whether the argument is numeric
+# usage: is_number ARG
+# eg. $ is_number 666
+is_number() {
+  var=$1
+  [ "$var" -eq "$var" ] 2>/dev/null;
+}
+
+
+# Tells whether an array contains a value
+# usage: array_contains ARRAY_NAME VALUE
+# eg. $ arr=( 1 2 3 ); value=3; array_contains arr $value
+array_contains() {
+    name=$1[@]
+    array=("${!name}")
+    value=$2
+    if [[ " ${array[@]} " =~ " ${value} " ]]; then
+	return 0
+    fi
+    return 1
+}

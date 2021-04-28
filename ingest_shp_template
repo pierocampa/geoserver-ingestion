@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Template wrapper of the ``ingest_shp'' shapefile ingestion and
+# publication script.
+#
+# @author pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+ME="$( basename $0 )"
+N_ARGS=2
+USAGE="$ME LAYER_NAME SRID"
+
+
+# exit codes
+CODE_OK=0
+CODE_WRONG_USAGE=2
+CODE_MISSING_SCRIPT=2
+
+
+# check args
+if [ $# -ne $N_ARGS ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+# parse args
+BASENAME="$1"
+SRID="$2"
+
+
+# fetch script
+PWD="$( pwd )"
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+cd -P "$PWD" # back to my folder
+
+
+INGEST_SHP="$SCRIPT_DIR/ingest_shp"
+if [ ! -f "$INGEST_SHP" ]; then
+   echo "(!) Missing \"$INGEST_SHP\" file".
+   exit $CODE_MISSING_SCRIPT
+fi
+
+
+#
+# run:
+#
+$INGEST_SHP "$BASENAME" --srid $SRID --publish #--dry-run
+
+exit $CODE_OK
+

@@ -1,0 +1,9 @@
+-----------------------------------------------------------------
+This folder contains the utilities for loading the data to the SDI.
+Each dataset will use these tools to get published via DATASET_NAME.sh script
+located in its folder.
+
+Publishing a dataset means ingestion into a PostGIS database defined
+in the ``pg_conn'' file, then publication as layer on the GeoServer
+instance defined in the ``gs_conn'' file.
+-----------------------------------------------------------------

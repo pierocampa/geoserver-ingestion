@@ -1,0 +1,8 @@
+GSUSER=cdr_admin
+GSURL=https://maps.eurac.edu/geoserver
+GSWORKSPACE=EO_CDR
+GSDATASTORE=eo_cdr_burundi
+
+# decode the DES3 encrypted password stored in the gs_pwd.des3 file.
+# decrypting password is equal to the postgres db schema name of the store:
+GSPWD=$( cat "$( dirname $0 )"/gs_pwd.des3 | openssl enc -d -des3 -base64 -pbkdf2 -pass pass:burundi_iom )

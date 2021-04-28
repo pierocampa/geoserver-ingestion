@@ -1,0 +1,113 @@
+#!/bin/bash
+
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Fetches the XML feature description of a GeoServer layer.
+#
+# The script reads the GeoServer connection parameters
+# from the ``gs_conn'' file.
+#
+# Requirements:
+#  + curl is installed
+#  + ./utils file exists in the script's directory
+#
+# @author: pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+# style
+underline=`tput smul`
+nounderline=`tput rmul`
+bold=`tput bold`
+normal=`tput sgr0`
+
+
+# utils
+UTILS_FILE="utils"
+
+
+ME="$( basename $0 )"
+HELP_ARGS=( '--help' '-h' )
+MIN_ARGS=1 # (help excluded)
+MAX_ARGS=1 #   ''     ''
+USAGE="\
+
+  ${bold}$ME${normal} ${underline}LAYER_NAME${normal}
+
+  ${bold}LAYER_NAME${normal}
+      The name of the layer published in GeoServer instance.
+
+  ${bold}[${HELP_ARGS[0]}|${HELP_ARGS[1]}]${normal}
+      Prints this text.
+"
+
+# exit codes:
+CODE_OK=0
+CODE_WRONG_USAGE=1
+CODE_UTILSFILE_NOT_FOUND=2
+CODE_GSFILE_NOT_FOUND=3
+CODE_CURL_NOT_INSTALLED=4
+
+
+# store script dir
+PWD="$( pwd )"
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+cd -P "$PWD" # back to shp folder
+
+
+# @inlcludes:
+if [ ! -f "$SCRIPT_DIR/$UTILS_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$UTILS_FILE\" file".
+   exit $CODE_UTILSFILE_NOT_FOUND
+fi
+. "$SCRIPT_DIR/$UTILS_FILE"
+
+#
+# check args
+#
+
+# args cardinality
+if [ $# -lt $MIN_ARGS -o $# -gt $MAX_ARGS ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+# help requested?
+if [ $# -eq 1 ]; then
+   if array_contains HELP_ARGS "$1" ; then
+      echo "$USAGE"
+      exit $CODE_OK
+   fi
+fi
+
+# parse args
+GSLAYER="$1"
+
+
+# check dependencies
+CURL=$( which curl )
+if [ $? -ne 0 ]; then
+  echo "curl is not installed. Please install it and retry."
+  exit $CODE_CURL_NOT_INSTALLED
+fi
+
+# check GeoServer connection file
+GSCONN_FILE="gs_conn"
+# check geoserver connection files exist
+if [ ! -f "$SCRIPT_DIR/$GSCONN_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$GSCONN_FILE\"".
+   exit $CODE_GSFILE_NOT_FOUND
+fi
+
+. "$SCRIPT_DIR/$GSCONN_FILE"
+MIME_XML="Content-type: text/xml"
+FTYPE_FILE="$GSLAYER.ftype.xml"
+
+#
+# run !
+#
+$CURL -u $GSUSER:$GSPWD \
+      -XGET \
+      -H "$MIME_XML" \
+      "$GSURL"/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml
+
+exit $CODE_OK

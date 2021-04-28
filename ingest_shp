@@ -1,0 +1,332 @@
+#!/bin/bash
+#
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Uploads a given dataset to the PostGIS/GeoServer stack.
+#
+# The script reads the Postgres and GeoServer connection parameters
+# from the ``pg_conn'' and ``gs_conn'' files respectively.
+#
+# Requirements:
+#  + psql, postgis and curl are installed
+#  + ./utils file exists in the script's directory
+#
+# @author: pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+# style
+underline=`tput smul`
+nounderline=`tput rmul`
+bold=`tput bold`
+normal=`tput sgr0`
+
+# utils
+UTILS_FILE="utils"
+
+# connection files
+PGCONN_FILE="pg_conn"
+GSCONN_FILE="gs_conn"
+
+# misc
+FTYPE_EXT="ftype.xml"
+SLD_EXT="sld"
+ MIME_XML="Content-type: text/xml"
+MIME_JSON="Content-type: text/json"
+ MIME_SLD="Content-type: application/vnd.ogc.sld+xml"
+
+ME="$( basename $0 )"
+SRID_ARGS=( '--srid' '-s' )
+PUBLISH_ARGS=( '--publish' '-p' )
+DRYRUN_ARGS=( '--dry-run' '-n' )
+HELP_ARGS=( '--help' '-h' )
+MIN_ARGS=3 # (help excluded)
+MAX_ARGS=6 #   ''     ''
+USAGE="\
+
+  ${bold}$ME${normal} ${underline}SHP_BASENAME${normal} [${SRID_ARGS[0]} ${underline}SRID${normal}]\
+ [${underline}OPTION${normal}]
+
+  ${bold}SHP_BASENAME${normal}
+      The basename of the shapefile to be ingested in the geo-database.
+      This can also be a path, but the extension of the file shall not be specified.
+
+  ${bold}[${SRID_ARGS[0]}, ${SRID_ARGS[1]}] SRID${normal}
+      The SRID code of the shapefile's projection.
+
+  ${bold}[${PUBLISH_ARGS[0]}, ${PUBLISH_ARGS[1]}]${normal}
+      Option to publish the ingested feature to GeoServer datastore.
+      This requires that files ${bold}SHP_BASENAME.$FTYPE_EXT${normal} and ${bold}SHP_BASENAME.$SLD_EXT${normal} both exist.
+      See GeoServer REST API to see examples of feature type descriptions and styles, eg.:
+      ${underline}https://GEOSERVER/rest/workspaces/{workspace}/datastores/{datastore}/featuretypes/{featuretype}.xml${normal}
+      ${underline}https://GEOSERVER/rest/workspaces/{workspace}/styles/{style}.xml${normal}
+
+  ${bold}[${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]}]${normal}
+      Switches to dry run test: prints out commands without hitting the database nor GeoServer.
+
+  ${bold}[${HELP_ARGS[0]}|${HELP_ARGS[1]}]${normal}
+      Prints this text.
+"
+
+# store script dir
+PWD="$( pwd )"
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+cd -P "$PWD" # back to shp folder
+
+
+# exit codes:
+CODE_OK=0
+CODE_WRONG_USAGE=1
+CODE_UTILSFILE_NOT_FOUND=2
+CODE_SHPFILE_NOT_FOUND=3
+CODE_FTFILE_NOT_FOUND=4
+CODE_SLDFILE_NOT_FOUND=5
+CODE_SLDFILE_INVALID=6
+CODE_PGFILE_NOT_FOUND=7
+CODE_GSFILE_NOT_FOUND=8
+CODE_CURL_NOT_INSTALLED=9
+CODE_XMLLINT_NOT_INSTALLED=10
+CODE_PSQL_NOT_INSTALLED=11
+CODE_PGIS_NOT_INSTALLED=12
+
+
+# @inlcludes:
+if [ ! -f "$SCRIPT_DIR/$UTILS_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$UTILS_FILE\" file".
+   exit $CODE_UTILSFILE_NOT_FOUND
+fi
+. "$SCRIPT_DIR/$UTILS_FILE"
+
+
+#
+# check args
+#
+
+# 0 args
+if [ $# -eq 0 ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# help requested?
+if [ $# -eq 1 ]; then
+   if ! array_contains HELP_ARGS "$1" ; then
+      echo "$USAGE"
+      exit $CODE_WRONG_USAGE
+   else
+      echo "$USAGE"
+      exit $CODE_OK
+   fi
+fi
+
+
+# ingestion requested:
+if [ $# -lt $MIN_ARGS -o $# -gt $MAX_ARGS ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# check shapefile
+SHPPATH="$1"
+SHPFILE="$( basename "$SHPPATH" )"
+SHPDIR="$( dirname "$SHPPATH" )"
+if [ ! -f "$SHPPATH.shp" ]; then
+   echo "\`\`$SHPPATH.shp'' not found."
+   echo "$USAGE"
+   exit $CODE_SHPFILE_NOT_FOUND
+fi
+shift
+# see shapefile information
+#ogrinfo -so bdi_adm_adm0_igebu_ocha_itos_2017_utm35S.shp bdi_adm_adm0_igebu_ocha_itos_2017_utm35S
+
+
+# parse args
+while [ $# -gt 0 ]; do
+   case "$1" in
+      ${SRID_ARGS[0]}|${SRID_ARGS[1]})  SRID="$2"; shift;;
+      ${PUBLISH_ARGS[0]}|${PUBLISH_ARGS[1]})  GSPUBLISH=1 ;;
+      ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";
+                                            DRY_PIPE="tr '\n' ' ' | cat && echo " ;;
+      *) echo -e "(!) Unknown argument \"$1\".\n$USAGE";
+         exit $CODE_WRONG_USAGE;;
+   esac
+   shift
+done
+# missing srid
+if [ -z ${SRID+x} ]; then
+   echo "SRID argument missing."
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+# invalid srid
+if ! is_number $SRID; then
+   echo "Invalid SRID code: \"$SRID\"."
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# check dependencies
+CURL=$( which curl )
+if [ $? -ne 0 ]; then
+  echo "curl is not installed. Please install it and retry."
+  exit $CODE_CURL_NOT_INSTALLED
+fi
+XMLLINT=$( which xmllint )
+#if [ $? -ne 0 ]; then
+#  echo "xmllint is not installed. Please install it and retry."
+#  exit $CODE_XMLLINT_NOT_INSTALLED
+#fi
+PSQL=$( which psql )
+if [ $? -ne 0 ]; then
+  echo "Postgres is not installed. Please install it and retry."
+  exit $CODE_PSQL_NOT_INSTALLED
+fi
+SHP2PGSQL=$( which shp2pgsql )
+if [ $? -ne 0 ]; then
+  echo "PostGIS is not installed. Please install it and retry."
+  exit $CODE_PGIS_NOT_INSTALLED
+fi
+
+
+#
+# START ingestion
+#
+
+# check postgres connection files exist
+if [ ! -f "$SCRIPT_DIR/$PGCONN_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$PGCONN_FILE\"".
+   exit $CODE_PGFILE_NOT_FOUND
+fi
+
+. "$SCRIPT_DIR/$PGCONN_FILE"
+PSQL_CONN="-h $PGHOST -p $PGPORT $PGDATABASE $PGUSER"
+PSQL_ERROR_STOP="-v ON_ERROR_STOP=1"
+
+if [ ! -z ${DRY+x} ]; then
+   echo "[========================   dry-run simulation   ========================]."
+
+fi
+
+# check shapefile has not been ingested already
+echo "SELECT * from $PGSCHEMA.$SHPFILE LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
+if [ $? -eq $CODE_OK ]; then
+   echo "(!) $SHPFILE table already exists in schema \"$PGSCHEMA\" of database \"$PGDATABASE\" ($PGHOST:$PGPORT): skipping ingestion."
+
+else
+   # ingest to PostGIS
+   echo -n "Ingesting \"$SHPFILE\" (EPSG:$SRID) shapefile to database \"$PGDATABASE\" ($PGHOST:$PGPORT)... "
+   #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$SHPFILE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
+   if [ ! -z ${DRY+x} ]; then
+   echo "$SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$SHPFILE" | $PSQL $PSQL_CONN"; else
+         $SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$SHPFILE" | $PSQL $PSQL_CONN
+   fi
+   echo "Done."
+fi
+
+# publish the layer in GeoServer
+if [ -z ${GSPUBLISH+x} ]; then
+   echo "Skipping publication of layer in GeoServer."
+
+else
+   # check geoserver connection files exist
+   if [ ! -f "$SCRIPT_DIR/$GSCONN_FILE" ]; then
+      echo "(!) Missing \"$SCRIPT_DIR/$GSCONN_FILE\"".
+      exit $CODE_GSFILE_NOT_FOUND
+   fi
+
+   . "$SCRIPT_DIR/$GSCONN_FILE"
+
+   # check feature type description file exists
+   GSFTYPE="$SHPPATH.$FTYPE_EXT"
+   if [ ! -f "$GSFTYPE" ]; then
+      echo "(!) Missing feature type description file \"$GSFTYPE\"."
+      echo "$USAGE"
+      exit $CODE_FTFILE_NOT_FOUND
+   fi
+
+   # check the style
+   GSSLD="$SHPPATH.$SLD_EXT"
+   if [ ! -f "$GSSLD" ]; then
+      echo "(!) Missing Styled Layer Descriptor (SLD) file \"$GSSLD\"."
+      echo "$USAGE"
+      exit $CODE_SLDFILE_NOT_FOUND
+   fi
+
+   # check style validity
+   SLDNAME="$( echo $( basename "$GSSLD" ) | tr '[:upper:]' '[:lower:]' )" #"$( "$XMLLINT" --xpath "string(//*[local-name()='NamedLayer']/*[local-name()='Name'])" "$GSSLD" )"
+   SLDNAME=${SLDNAME%.*} # strip extension
+   if [ -z "$SLDNAME" ]; then
+      echo "(!) SLD name (XPATH //NamedLayer/Name)) not found in \"$GSSLD\". Please check the SLD and retry."
+      exit $CODE_SLDFILE_INVALID
+   fi
+
+
+   # Postgres removes upper-case letters:
+   GSLAYER=$( echo "$SHPFILE" | tr '[:upper:]' '[:lower:]' )
+
+   # update GeoServer:
+   HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
+      -XGET -sS -o /dev/null -w "%{http_code}" \
+      "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml" )
+
+   if [ $HTTPCODE -gt 400 ]; then
+      echo -n "Publishing layer \"$GSLAYER\" to GeoServer instance at $GSURL... "
+      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+         -XPOST -H "$MIME_XML" \
+         -d @"$GSFTYPE" \
+         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes"
+      echo "Done."
+   else
+      echo -n "Updating layer \"$GSLAYER\" to GeoServer instance at $GSURL... "
+      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+         -XPUT -H "$MIME_XML" \
+         -d @"$GSFTYPE" \
+         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER" # TODO: ?recalculate=nativebbox,latlonbbox
+      echo "Done."
+   fi
+
+
+   HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
+      -XGET -sS -o /dev/null -w "%{http_code}" \
+      "$GSURL/rest/workspaces/$GSWORKSPACE/styles/$SLDNAME.xml" )
+
+   if [ $HTTPCODE -gt 400 ]; then
+      echo -n "Uploading style \"$GSSLD\"... "
+      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+         -XPOST -H "$MIME_SLD" \
+         -d @"$GSSLD" \
+         "$GSURL/rest/workspaces/$GSWORKSPACE/styles?name=$SLDNAME"
+      echo "Done."
+   else
+      echo -n "Updating style \"$GSSLD\"... "
+      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+         -XPUT -H "$MIME_SLD" \
+         -d @"$GSSLD" \
+         "$GSURL/rest/workspaces/$GSWORKSPACE/styles/$SLDNAME"
+      echo "Done."
+   fi
+
+   # prepare POST body:
+   JSONBODY="$( mktemp )"
+   echo "{ \"style\": { \"name\": \"$SLDNAME\", \"filename\": \"$GSSLD\" } }" > "$JSONBODY"
+
+   echo -n "Attaching the style \"$SLDNAME\" to the layer \"$GSLAYER\"... "
+   $DRY $CURL -sS -o /dev/null -u $GSUSER:$GSPWD \
+      -XPOST -H "$MIME_JSON" \
+      -d @"$JSONBODY" \
+      "$GSURL/rest/layers/$GSLAYER/styles?default=true"
+   echo "Done."
+
+   echo -n "Clearing layer \"$GSLAYER\" cache... "
+   $DRY $CURL -u $GSUSER:$GSPWD \
+      -XDELETE -s -o /dev/null \
+      "$GSURL/gwb/rest/layers/${GSWORKSPACE}:${GSLAYER}"
+   echo "Done."
+
+   echo "Publication done."
+fi
+
+echo "Bye..."
+exit $CODE_OK
