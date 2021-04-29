@@ -83,10 +83,11 @@ CODE_SLDFILE_NOT_FOUND=5
 CODE_SLDFILE_INVALID=6
 CODE_PGFILE_NOT_FOUND=7
 CODE_GSFILE_NOT_FOUND=8
-CODE_CURL_NOT_INSTALLED=9
-CODE_XMLLINT_NOT_INSTALLED=10
-CODE_PSQL_NOT_INSTALLED=11
-CODE_PGIS_NOT_INSTALLED=12
+CODE_GSPWDFILE_NOT_FOUND=9
+CODE_CURL_NOT_INSTALLED=10
+CODE_XMLLINT_NOT_INSTALLED=11
+CODE_PSQL_NOT_INSTALLED=12
+CODE_PGIS_NOT_INSTALLED=13
 
 
 # @inlcludes:
@@ -210,17 +211,18 @@ if [ ! -z ${DRY+x} ]; then
 fi
 
 # check shapefile has not been ingested already
-echo "SELECT * from $PGSCHEMA.$SHPFILE LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
+PGTABLE=$( echo "$SHPFILE" | tr '[:upper:]' '[:lower:]' )
+echo "SELECT * from $PGSCHEMA.\"$PGTABLE\" LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
 if [ $? -eq $CODE_OK ]; then
    echo "(!) $SHPFILE table already exists in schema \"$PGSCHEMA\" of database \"$PGDATABASE\" ($PGHOST:$PGPORT): skipping ingestion."
 
 else
    # ingest to PostGIS
    echo -n "Ingesting \"$SHPFILE\" (EPSG:$SRID) shapefile to database \"$PGDATABASE\" ($PGHOST:$PGPORT)... "
-   #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$SHPFILE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
+   #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$PGTABLE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
    if [ ! -z ${DRY+x} ]; then
-   echo "$SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$SHPFILE" | $PSQL $PSQL_CONN"; else
-         $SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$SHPFILE" | $PSQL $PSQL_CONN
+   echo "$SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
+         $SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
    fi
    echo "Done."
 fi
@@ -237,6 +239,14 @@ else
    fi
 
    . "$SCRIPT_DIR/$GSCONN_FILE"
+
+   # decode the DES3 encrypted password stored in the gs_pwd.des3 file.
+   # decrypting password is equal to the geoserver workspace:
+   GSPWD=$( cat "$( dirname $0 )"/$GSPWD_FILE | openssl enc -d -des3 -base64 -pbkdf2 -pass pass:$GSWORKSPACE )
+   if [ ! -f "$SCRIPT_DIR/$GSPWD_FILE" ]; then
+      echo "(!) Missing \"$SCRIPT_DIR/$GSPWD_FILE\"".
+      exit $CODE_GSPWDFILE_NOT_FOUND
+   fi
 
    # check feature type description file exists
    GSFTYPE="$SHPPATH.$FTYPE_EXT"
@@ -264,7 +274,7 @@ else
 
 
    # Postgres removes upper-case letters:
-   GSLAYER=$( echo "$SHPFILE" | tr '[:upper:]' '[:lower:]' )
+   GSLAYER=$PGTABLE
 
    # update GeoServer:
    HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
