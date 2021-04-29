@@ -145,6 +145,7 @@ shift
 # parse args
 while [ $# -gt 0 ]; do
    case "$1" in
+      ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
       ${SRID_ARGS[0]}|${SRID_ARGS[1]})  SRID="$2"; shift;;
       ${PUBLISH_ARGS[0]}|${PUBLISH_ARGS[1]})  GSPUBLISH=1 ;;
       ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";

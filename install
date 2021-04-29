@@ -1,0 +1,47 @@
+#!/bin/bash
+
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Installs the ingestion utilities in the system onto the given directory.
+#
+# USAGE: $0 TARGET_DIR
+# @author: pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+USAGE="$0 TARGET_DIR"
+ME="$( basename $0 )"
+
+scripts="ingest_shp fetch_ftype utils"
+conn_files="pg_conn.default gs_conn.default"
+n_args=1
+
+# exit codes:
+CODE_OK=0
+CODE_WRONG_USAGE=1
+
+# echo formatting
+bold=`tput bold`
+normal=`tput sgr0`
+alias log='echo ${bold}[$ME]${normal} '
+alias logn='echo -n ${bold}[$ME]${normal} '
+shopt -s expand_aliases
+
+# check args
+if [ $# -ne $n_args ]; then
+   echo USAGE: "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+target_dir="$1"
+if [ ! -d "$target_dir" ]; then
+   mkdir "$target_dir"
+fi
+
+# install
+log "Installing scripts to \"$target_dir\"... "
+cp -v $scripts $target_dir
+cp -iv $conn_files $target_dir
+log "Done."
+log "Bye..."
+
+unalias log
+exit $CODE_OK
