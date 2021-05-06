@@ -1,0 +1,239 @@
+#!/bin/bash
+#
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Unpublishes (and optionally drops) a dataset from the PostGIS/GeoServer stack.
+#
+# The script reads the Postgres and GeoServer connection parameters
+# from the ``pg_conn'' and ``gs_conn'' files respectively.
+#
+# Requirements:
+#  + psql and curl are installed
+#  + ./utils file exists in the script's directory
+#
+# @author: pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+# style
+underline=`tput smul`
+nounderline=`tput rmul`
+bold=`tput bold`
+normal=`tput sgr0`
+
+# utils
+UTILS_FILE="utils"
+
+# connection files
+PGCONN_FILE="pg_conn"
+GSCONN_FILE="gs_conn"
+
+# misc
+SLD_EXT="sld"
+MIME_XML="Content-type: text/xml"
+
+ME="$( basename $0 )"
+DROP_ARGS=( '--drop' '-d' )
+KEEPSTYLE_ARGS=( '--keep-style' '-s' )
+DRYRUN_ARGS=( '--dry-run' '-n' )
+HELP_ARGS=( '--help' '-h' )
+MIN_ARGS=1 # (help excluded)
+MAX_ARGS=4 #   ''     ''
+USAGE="\
+
+  ${bold}$ME${normal} ${underline}LAYER_NAME${normal} [${underline}OPTION${normal}]
+
+  ${bold}LAYER_NAME${normal}
+      The name of the GeoServer layer (and PostGIS table) that has to be unpublished.
+
+  ${bold}[${DROP_ARGS[0]}, ${DROP_ARGS[1]}]${normal}
+      Option to additionally drop the data from the PostGIS database.
+
+  ${bold}[${KEEPSTYLE_ARGS[0]}, ${KEEPSTYLE_ARGS[1]}]${normal}
+      Option to avoid deleting the layer's style definition from the GeoServer collection.
+
+  ${bold}[${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]}]${normal}
+      Switches to dry run test: prints out commands without hitting the database nor GeoServer.
+
+  ${bold}[${HELP_ARGS[0]}|${HELP_ARGS[1]}]${normal}
+      Prints this text.
+"
+
+# store script dir
+PWD="$( pwd )"
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+cd -P "$PWD" # back to shp folder
+
+
+# exit codes:
+CODE_OK=0
+CODE_WRONG_USAGE=1
+CODE_UTILSFILE_NOT_FOUND=2
+CODE_SHPFILE_NOT_FOUND=3
+CODE_PGFILE_NOT_FOUND=4
+CODE_GSFILE_NOT_FOUND=5
+CODE_GSPWDFILE_NOT_FOUND=6
+CODE_CURL_NOT_INSTALLED=7
+CODE_PSQL_NOT_INSTALLED=8
+CODE_LAYER_NOT_FOUND=9
+
+
+# @inlcludes:
+if [ ! -f "$SCRIPT_DIR/$UTILS_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$UTILS_FILE\" file".
+   exit $CODE_UTILSFILE_NOT_FOUND
+fi
+. "$SCRIPT_DIR/$UTILS_FILE"
+
+
+#
+# check args
+#
+
+# 0 args
+if [ $# -eq 0 ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# help requested?
+if [ $# -eq 1 ]; then
+   if ! array_contains HELP_ARGS "$1" ; then
+      echo "$USAGE"
+      exit $CODE_WRONG_USAGE
+   else
+      echo "$USAGE"
+      exit $CODE_OK
+   fi
+fi
+
+
+# ingestion requested:
+if [ $# -lt $MIN_ARGS -o $# -gt $MAX_ARGS ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# parse args
+LAYER_NAME="$1"
+shift
+while [ $# -gt 0 ]; do
+   case "$1" in
+      ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
+      ${DROP_ARGS[0]}|${DROP_ARGS[1]})  DROP=1 ;;
+      ${KEEPSTYLE_ARGS[0]}|${KEEPSTYLE_ARGS[1]})  KEEPSTYLE=1 ;;
+      ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";
+                                            DRY_PIPE="tr '\n' ' ' | cat && echo " ;;
+      *) echo -e "(!) Unknown argument \"$1\".\n$USAGE";
+         exit $CODE_WRONG_USAGE;;
+   esac
+   shift
+done
+
+
+# check dependencies
+CURL=$( which curl )
+if [ $? -ne 0 ]; then
+  echo "curl is not installed. Please install it and retry."
+  exit $CODE_CURL_NOT_INSTALLED
+fi
+PSQL=$( which psql )
+if [ $? -ne 0 ]; then
+  echo "Postgres is not installed. Please install it and retry."
+  exit $CODE_PSQL_NOT_INSTALLED
+fi
+
+
+#
+# START
+#
+
+if [ ! -z ${DRY+x} ]; then
+   echo "[========================   dry-run simulation   ========================]."
+
+fi
+
+# check geoserver connection files exist
+if [ ! -f "$SCRIPT_DIR/$GSCONN_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$GSCONN_FILE\"".
+   exit $CODE_GSFILE_NOT_FOUND
+fi
+
+. "$SCRIPT_DIR/$GSCONN_FILE"
+echo "GeoServer reference instance: $GSURL"
+
+# decode the DES3 encrypted password stored in the gs_pwd.des3 file.
+# decrypting password is equal to the geoserver workspace:
+GSPWD=$( cat "$( dirname $0 )"/$GSPWD_FILE | openssl enc -d -des3 -base64 -pbkdf2 -pass pass:$GSWORKSPACE )
+if [ ! -f "$SCRIPT_DIR/$GSPWD_FILE" ]; then
+   echo "(!) Missing \"$SCRIPT_DIR/$GSPWD_FILE\"".
+   exit $CODE_GSPWDFILE_NOT_FOUND
+fi
+
+# delete GeoServer feature type (and referenced layers recursively) if exists
+GSLAYER="$LAYER_NAME"
+HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
+   -XGET -sS -o /dev/null -w "%{http_code}" \
+   "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml" )
+
+if [ $HTTPCODE -gt 400 ]; then
+   echo "[1] Layer \"$LAYER_NAME\" was not found in GeoServer's \"$GSWORKSPACE:$GSDATASTORE\" store."
+   if [ -z ${DROP+x} ]; then
+      exit $CODE_LAYER_NOT_FOUND
+   fi
+else
+   echo -n "Unpublishing layer \"$GSLAYER\" from GeoServer instance... "
+   $DRY $CURL -sS -u $GSUSER:$GSPWD \
+      -XDELETE \
+      "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER?recurse=true"
+   echo "Done."
+
+   # delete associated style
+   GSSTYLE="$GSLAYER"
+   if [ ! -z ${KEEPSTYLE+x} ]; then
+      echo "Shall not delete the layer's default style."
+
+   else
+      echo -n "Deleting layer's default style \"$GSSTYLE\"..."
+      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+         -XDELETE -o /dev/null \
+         "$GSURL/rest/workspaces/$GSWORKSPACE/styles/$GSSTYLE?purge=true&recurse=true"
+      echo "Done."
+   fi
+fi
+
+# drop data from database
+if [ ! -z ${DROP+x} ]; then
+
+   # check postgres connection files exist
+   if [ ! -f "$SCRIPT_DIR/$PGCONN_FILE" ]; then
+      echo "(!) Missing \"$SCRIPT_DIR/$PGCONN_FILE\"".
+      exit $CODE_PGFILE_NOT_FOUND
+   fi
+
+   . "$SCRIPT_DIR/$PGCONN_FILE"
+   echo "PostGIS reference database: \"$PGDATABASE\" ($PGHOST:$PGPORT)"
+
+   PSQL_CONN="-h $PGHOST -p $PGPORT $PGDATABASE $PGUSER"
+   PSQL_ERROR_STOP="-v ON_ERROR_STOP=1"
+
+   PGTABLE="$LAYER_NAME"
+   echo "SELECT * from $PGSCHEMA.\"$PGTABLE\" LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
+
+   if [ $? -ne $CODE_OK ]; then
+      echo "(!) \"$PGTABLE\" table was not found in schema \"$PGSCHEMA\": skipping deletion."
+
+   else
+      # ingest to PostGIS
+      echo -n "Dropping \"$PGSCHEMA.$PGTABLE\" table from database... "
+      if [ ! -z ${DRY+x} ]; then
+      echo "echo \"DROP TABLE $PGSCHEMA.$PGTABLE\" : $PSQL $PSQL_CONN"; else
+            echo  "DROP TABLE $PGSCHEMA.$PGTABLE"  | $PSQL $PSQL_CONN >&/dev/null
+      fi
+      echo "Done."
+   fi
+fi
+
+echo "Bye.."
+exit $CODE_OK

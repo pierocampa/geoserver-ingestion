@@ -274,7 +274,7 @@ else
    fi
 
 
-   # Postgres removes upper-case letters:
+   # GeoServer layer name is the same as the PostGIS table
    GSLAYER=$PGTABLE
 
    # update GeoServer:
@@ -298,7 +298,7 @@ else
       echo "Done."
    fi
 
-
+   # create/update style
    HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
       -XGET -sS -o /dev/null -w "%{http_code}" \
       "$GSURL/rest/workspaces/$GSWORKSPACE/styles/$SLDNAME.xml" )
@@ -323,8 +323,9 @@ else
    JSONBODY="$( mktemp )"
    echo "{ \"style\": { \"name\": \"$SLDNAME\", \"filename\": \"$GSSLD\" } }" > "$JSONBODY"
 
+   # set style as default for layer
    echo -n "Attaching the style \"$SLDNAME\" to the layer \"$GSLAYER\"... "
-   $DRY $CURL -sS -o /dev/null -u $GSUSER:$GSPWD \
+   $DRY $CURL -sS -u $GSUSER:$GSPWD \
       -XPOST -H "$MIME_JSON" \
       -d @"$JSONBODY" \
       "$GSURL/rest/layers/$GSLAYER/styles?default=true"

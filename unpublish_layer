@@ -1,6 +1,0 @@
-#!/bin/bash
-
-# TODO unpublish a GeoServer layer
-# USAGE: $0 LAYER_NAME --delete --keep-style
-#  --delete: deletes the data from the database
-#  --keep-style: do not delete the default style def in Geoerver
