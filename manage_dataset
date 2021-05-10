@@ -23,6 +23,7 @@ UTILS_FILE="utils"
 INGEST_SCRIPT="ingest_shp"
 UNPUBL_SCRIPT="unpublish_shp"
 
+SH_EXT="sh"
 SHP_EXT="shp"
 SRID_EXT="srid"
 
@@ -185,25 +186,26 @@ fi
 echo "Searching recursively for geospatial datasets inside \"$ROOT_FOLDER\"..."
 
 lastdir=""
-for shapepath in $( find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" ); do
+find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -r shapepath; do
 
-   shapefile=$( basename "$shapepath" )
-   shpnamepath="${shapepath%.*}"
-   shpname=$( basename "$shpnamepath" )
-   layername="$( lowercase "$shpname" )"
+   shapefile="$( basename "$shapepath" )"  # /ShapeFile.shp
+   shpnamepath="${shapepath%.*}"           # /path/to/ShapeFile
+   shpname="$( basename "$shpnamepath" )"  # ShapeFile
+   layername="$( lowercase "$shpname" )"   # shapefile
 
    thisdir="$( dirname "$shapepath" )"
    if [ "$thisdir" != "$lastdir" ]; then
-      echo "[/] $thisdir :"
+      echo "-- ${thisdir}/"
       lastdir="$thisdir"
    fi
 
-   echo -n "    + $ACTION $shapefile... "
+   echo -n "      $ACTION $shapefile... "
 
    sridfile="$shpnamepath.$SRID_EXT"
    if [ ! -f "$sridfile" ]; then
-      echo "(!) Missing "$sridfile" file."
-      exit $CODE_MISSING_SRID_FILE
+      echo "(!) Missing ".$SRID_EXT" file."
+      #exit $CODE_MISSING_SRID_FILE lenient
+      continue
    fi
    srid=$( cat "$sridfile" )
 
