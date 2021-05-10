@@ -207,12 +207,11 @@ PSQL_CONN="-h $PGHOST -p $PGPORT $PGDATABASE $PGUSER"
 PSQL_ERROR_STOP="-v ON_ERROR_STOP=1"
 
 if [ ! -z ${DRY+x} ]; then
-   echo "[========================   dry-run simulation   ========================]."
-
+   echo "[========================   dry-run simulation   ========================]"
 fi
 
 # check shapefile has not been ingested already
-PGTABLE=$( echo "$SHPFILE" | tr '[:upper:]' '[:lower:]' )
+PGTABLE=$( lowercase "$SHPFILE" )
 echo "SELECT * from $PGSCHEMA.\"$PGTABLE\" LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
 if [ $? -eq $CODE_OK ]; then
    echo "(!) $SHPFILE table already exists in schema \"$PGSCHEMA\" of database \"$PGDATABASE\" ($PGHOST:$PGPORT): skipping ingestion."
@@ -266,7 +265,7 @@ else
    fi
 
    # check style validity
-   SLDNAME="$( echo $( basename "$GSSLD" ) | tr '[:upper:]' '[:lower:]' )" #"$( "$XMLLINT" --xpath "string(//*[local-name()='NamedLayer']/*[local-name()='Name'])" "$GSSLD" )"
+   SLDNAME="$( echo $( lowercase "$( basename "$GSSLD" )" ) )" #"$( "$XMLLINT" --xpath "string(//*[local-name()='NamedLayer']/*[local-name()='Name'])" "$GSSLD" )"
    SLDNAME=${SLDNAME%.*} # strip extension
    if [ -z "$SLDNAME" ]; then
       echo "(!) SLD name (XPATH //NamedLayer/Name)) not found in \"$GSSLD\". Please check the SLD and retry."

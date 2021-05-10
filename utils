@@ -24,3 +24,10 @@ array_contains() {
     fi
     return 1
 }
+
+
+# Turns an argument to lowercase letters
+lowercase() {
+    string=$1
+    echo "$string" | tr '[:upper:]' '[:lower:]'
+}

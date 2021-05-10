@@ -1,0 +1,268 @@
+#!/bin/bash
+#
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+# Manages bulk handling of geospatial datasets in a PostGIS/GeoServer stack.
+# (NOTE: only shapefiles handled for now)
+#
+# The reference Postgres and GeoServer connection parameters are parsed
+# from the ``pg_conn'' and ``gs_conn'' files in this folder.
+#
+# @author: pcampalani
+#-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+
+# style
+underline=`tput smul`
+nounderline=`tput rmul`
+bold=`tput bold`
+normal=`tput sgr0`
+
+ME="$( basename $0 )"
+
+# utils
+UTILS_FILE="utils"
+INGEST_SCRIPT="ingest_shp"
+UNPUBL_SCRIPT="unpublish_shp"
+
+SHP_EXT="shp"
+SRID_EXT="srid"
+
+LOAD_ACTIONS=( 'load' 'l' )
+PUBLISH_ACTIONS=( 'publish' 'p' )
+UNPUBLISH_ACTIONS=( 'unpublish' 'u' )
+DROP_ACTIONS=( 'drop' 'd' )
+
+OK_UPDATE_FILE="update"
+OK_DELETE_FILE="delete"
+
+FORCE_ARGS=( '--force' '-f' )
+DRYRUN_ARGS=( '--dry-run' '-n' )
+HELP_ARGS=( '--help' '-h' )
+MIN_ARGS=2 # (help excluded)
+#MAX_ARGS -> do not set a maximum, as master passes on all extra args to slave
+USAGE="\
+
+  ${bold}$ME${normal} ${underline}ACTION${normal} ${underline}FOLDER${normal} [${underline}OPTION${normal}]
+
+  ${bold}ACTION${normal}
+      ${bold}[${LOAD_ACTIONS[0]}, ${LOAD_ACTIONS[1]}${normal}]
+          Just load the datasets into the database.
+
+      ${bold}[${PUBLISH_ACTIONS[0]}, ${PUBLISH_ACTIONS[1]}${normal}]
+          Load the datasets into the PostGIS database (if not yet stored), then publish them as GeoServer layers.
+
+      ${bold}[${UNPUBLISH_ACTIONS[0]}, ${UNPUBLISH_ACTIONS[1]}${normal}]
+          Unpublish the GeoServer layers, but keep the data in the database.
+
+      ${bold}[${DROP_ACTIONS[0]}, ${DROP_ACTIONS[1]}${normal}]
+          Unpublish the GeoServer layers, then drop the data from the database.
+
+  ${bold}FOLDER${normal}
+      Root folder where to look for datasets to be managed.
+      Not that the script will identify a dataset by looking for any ${underline}.sh${normal} script
+      under the directory, and will execute the action on the dataset based on the
+      folloqing conditions:
+
+          + ${bold}${LOAD_ACTIONS[1]}${normal} and ${bold}${PUBLISH_ACTIONS[1]}${normal} actions will be executed
+            if a file called ${underline}$OK_UPDATE_FILE${normal} is found in the directory;
+
+          + ${bold}${UNPUBLISH_ACTIONS[1]}${normal} and ${bold}${DROP_ACTIONS[1]}${normal} actions will be executed
+            if a file called ${underline}$OK_DELETE_FILE${normal} is found in the directory;
+
+      NOTE: use the ${bold}${FORCE_ARGS[0]}${normal} argument to force the execution of the
+      action on all datasets.
+
+
+  ${bold}OPTION${normal}
+      ${bold}[${FORCE_ARGS[0]}, ${FORCE_ARGS[1]}]${normal}
+          Forces the action to be executed on all datasets found under the given FOLDER.
+
+      ${bold}[${DRYRUN_ARGS[0]}, ${DRYRUN_ARGS[1]}]${normal}
+          Dry run test: prints out commands without hitting the database nor GeoServer.
+
+      ${bold}[${HELP_ARGS[0]}, ${HELP_ARGS[1]}]${normal}
+          Prints this text.
+"
+
+# store script dir
+PWD="$( pwd )"
+SOURCE="${BASH_SOURCE[0]}"
+SOURCE_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+cd -P "$PWD" # back to shp folder
+
+
+# exit codes:
+CODE_OK=0
+CODE_WRONG_USAGE=100
+CODE_MISSING_SRC=101
+CODE_MISSING_SRID_FILE=102
+CODE_INVALID_FOLDER=103
+CODE_SLAVE_ERROR=104
+
+
+# slave scripts
+for src_script in "$UTILS_FILE" "$INGEST_SCRIPT" "$UNPUBL_SCRIPT"; do
+   if [ ! -f "$SOURCE_DIR/$src_script" ]; then
+      echo "(!) Missing \"$SOURCE_DIR/$src_script\" file".
+      exit $CODE_MISSING_SRC
+   fi
+done
+
+. "$SOURCE_DIR/$UTILS_FILE"
+
+#
+# check args
+#
+
+# 0 args
+if [ $# -eq 0 ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# help requested?
+if [ $# -eq 1 ]; then
+   if ! array_contains HELP_ARGS "$1" ; then
+      echo "$USAGE"
+      exit $CODE_WRONG_USAGE
+   else
+      echo "$USAGE"
+      exit $CODE_OK
+   fi
+fi
+
+
+# ingestion requested:
+if [ $# -lt $MIN_ARGS ]; then
+   echo "$USAGE"
+   exit $CODE_WRONG_USAGE
+fi
+
+
+# check action
+ACTION="$1"
+shift
+case "$ACTION" in
+   ${LOAD_ACTIONS[0]}|${LOAD_ACTIONS[1]})           LOAD=1; ACTION="LOAD" ;;
+   ${PUBLISH_ACTIONS[0]}|${PUBLISH_ACTIONS[1]})     PUBL=1; ACTION="PUBLISH" ;;
+   ${UNPUBLISH_ACTIONS[0]}|${UNPUBLISH_ACTIONS[1]}) UNPB=1; ACTION="UNPUBLISH" ;;
+   ${DROP_ACTIONS[0]}|${DROP_ACTIONS[1]})           DROP=1; ACTION="DROP" ;;
+   *) echo -e "(!) Invalid action \"$ACTION\"."
+      echo "$USAGE"
+      exit $CODE_WRONG_USAGE;;
+esac
+
+# check folder
+ROOT_FOLDER="$1"
+shift
+if [ ! -d "$ROOT_FOLDER" ]; then
+   echo "Folder \"$ROOT_FOLDER\" does not exist."
+   echo $USAGE
+   exit $CODE_INVALID_FOLDER
+fi
+
+# parse args
+unset forward_args
+while [ $# -gt 0 ]; do
+   case "$1" in
+      ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
+      ${FORCE_ARGS[0]}|${FORCE_ARGS[1]})    FORCE=1 ;;
+      ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY=1 ;;
+      *) forward_args+=( "$1" ) ;;
+   esac
+   shift
+done
+
+
+#
+# RUN
+#
+
+if [ ! -z ${DRY+x} ]; then
+   echo "[========================   dry-run simulation   ========================]"
+fi
+
+echo "Searching recursively for geospatial datasets inside \"$ROOT_FOLDER\"..."
+
+lastdir=""
+for shapepath in $( find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" ); do
+
+   shapefile=$( basename "$shapepath" )
+   shpnamepath="${shapepath%.*}"
+   shpname=$( basename "$shpnamepath" )
+   layername="$( lowercase "$shpname" )"
+
+   thisdir="$( dirname "$shapepath" )"
+   if [ "$thisdir" != "$lastdir" ]; then
+      echo "[/] $thisdir :"
+      lastdir="$thisdir"
+   fi
+
+   echo -n "    + $ACTION $shapefile... "
+
+   sridfile="$shpnamepath.$SRID_EXT"
+   if [ ! -f "$sridfile" ]; then
+      echo "(!) Missing "$sridfile" file."
+      exit $CODE_MISSING_SRID_FILE
+   fi
+   srid=$( cat "$sridfile" )
+
+   if   [ ! -z ${LOAD+x} ]; then
+      script=$INGEST_SCRIPT
+      check_file=$OK_UPDATE_FILE
+      name_arg="$shpnamepath"
+      forward_args+=( "--srid" $srid )
+
+   elif [ ! -z ${PUBL+x} ]; then
+      script=$INGEST_SCRIPT
+      check_file=$OK_UPDATE_FILE
+      name_arg="$shpnamepath"
+      forward_args+=( "--srid" $srid "--publish" )
+
+   elif [ ! -z ${UNPB+x} ]; then
+      script=$UNPUBL_SCRIPT
+      check_file=$OK_DELETE_FILE
+      name_arg="$layername"
+
+   elif [ ! -z ${DROP+x} ]; then
+      script=$UNPUBL_SCRIPT
+      check_file=$OK_DELETE_FILE
+      name_arg="$layername"
+      forward_args+=( "--drop" )
+
+   else
+      echo "Should not be here: bug!"
+      exit 500
+   fi
+
+
+   # run condition:
+   [ -f "$thisdir/$check_file" ]
+   run=$?
+   rm "$thisdir/$check_file" &>/dev/null
+
+   # force condition
+   [ ! -z ${FORCE+x} ]
+   force=$?
+
+   # execute:
+   if [ $run -eq 0 -o $force -eq 0 ]; then
+
+      logfile="$shpnamepath.log"
+      "$SOURCE_DIR/$script" "$name_arg" ${forward_args[@]} &> "$logfile"
+
+      if [ $? -eq $CODE_OK ]; then
+         echo "Done."
+      else
+         echo "Error! Check \"$logfile\" for further details."
+         exit $CODE_SLAVE_ERROR
+      fi
+
+   else
+      echo "Skip."
+   fi
+done
+
+
+echo "Bye..."
+exit $CODE_OK

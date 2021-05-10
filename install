@@ -10,8 +10,17 @@
 USAGE="$0 TARGET_DIR"
 ME="$( basename $0 )"
 
-scripts="ingest_shp fetch_ftype utils"
-conn_files="pg_conn.default gs_conn.default"
+scripts="
+ manage_dataset
+ ingest_shp
+ unpublish_shp
+ fetch_ftype utils
+"
+conn_files="
+ pg_conn.default
+ gs_conn.default
+"
+
 n_args=1
 
 # exit codes:

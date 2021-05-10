@@ -97,14 +97,9 @@ fi
 
 
 # help requested?
-if [ $# -eq 1 ]; then
-   if ! array_contains HELP_ARGS "$1" ; then
-      echo "$USAGE"
-      exit $CODE_WRONG_USAGE
-   else
-      echo "$USAGE"
-      exit $CODE_OK
-   fi
+if array_contains HELP_ARGS "$1" ; then
+   echo "$USAGE"
+   exit $CODE_OK
 fi
 
 
@@ -116,11 +111,12 @@ fi
 
 
 # parse args
-LAYER_NAME="$1"
+LAYER_NAME="$( basename "$1" )"
+# lenient on paths to files given:
+LAYER_NAME=$( lowercase "$LAYER_NAME" )
 shift
 while [ $# -gt 0 ]; do
    case "$1" in
-      ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
       ${DROP_ARGS[0]}|${DROP_ARGS[1]})  DROP=1 ;;
       ${KEEPSTYLE_ARGS[0]}|${KEEPSTYLE_ARGS[1]})  KEEPSTYLE=1 ;;
       ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";
@@ -150,7 +146,7 @@ fi
 #
 
 if [ ! -z ${DRY+x} ]; then
-   echo "[========================   dry-run simulation   ========================]."
+   echo "[========================   dry-run simulation   ========================]"
 
 fi
 
