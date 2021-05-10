@@ -42,7 +42,7 @@ MIN_ARGS=3 # (help excluded)
 MAX_ARGS=6 #   ''     ''
 USAGE="\
 
-  ${bold}$ME${normal} ${underline}SHP_BASENAME${normal} [${SRID_ARGS[0]} ${underline}SRID${normal}]\
+  ${bold}$ME${normal} ${underline}SHP_BASENAME${normal} ${SRID_ARGS[0]} ${underline}SRID${normal}\
  [${underline}OPTION${normal}]
 
   ${bold}SHP_BASENAME${normal}
@@ -59,10 +59,10 @@ USAGE="\
       ${underline}https://GEOSERVER/rest/workspaces/{workspace}/datastores/{datastore}/featuretypes/{featuretype}.xml${normal}
       ${underline}https://GEOSERVER/rest/workspaces/{workspace}/styles/{style}.xml${normal}
 
-  ${bold}[${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]}]${normal}
+  ${bold}[${DRYRUN_ARGS[0]}, ${DRYRUN_ARGS[1]}]${normal}
       Switches to dry run test: prints out commands without hitting the database nor GeoServer.
 
-  ${bold}[${HELP_ARGS[0]}|${HELP_ARGS[1]}]${normal}
+  ${bold}[${HELP_ARGS[0]}, ${HELP_ARGS[1]}]${normal}
       Prints this text.
 "
 

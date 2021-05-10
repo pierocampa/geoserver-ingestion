@@ -59,9 +59,9 @@ USAGE="\
 
   ${bold}FOLDER${normal}
       Root folder where to look for datasets to be managed.
-      Not that the script will identify a dataset by looking for any ${underline}.sh${normal} script
+      The script will identify a dataset by looking for any ${underline}.sh${normal} script
       under the directory, and will execute the action on the dataset based on the
-      folloqing conditions:
+      following conditions:
 
           + ${bold}${LOAD_ACTIONS[1]}${normal} and ${bold}${PUBLISH_ACTIONS[1]}${normal} actions will be executed
             if a file called ${underline}$OK_UPDATE_FILE${normal} is found in the directory;

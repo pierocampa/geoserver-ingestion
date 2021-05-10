@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
 # Fetches the XML feature description of a GeoServer layer.
@@ -35,7 +35,7 @@ USAGE="\
   ${bold}LAYER_NAME${normal}
       The name of the layer published in GeoServer instance.
 
-  ${bold}[${HELP_ARGS[0]}|${HELP_ARGS[1]}]${normal}
+  ${bold}[${HELP_ARGS[0]}, ${HELP_ARGS[1]}]${normal}
       Prints this text.
 "
 
