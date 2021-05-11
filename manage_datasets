@@ -241,7 +241,6 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
    # run condition:
    [ -f "$thisdir/$check_file" ]
    run=$?
-   rm "$thisdir/$check_file" &>/dev/null
 
    # force condition
    [ ! -z ${FORCE+x} ]
@@ -255,6 +254,7 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
 
       if [ $? -eq $CODE_OK ]; then
          echo "Done."
+         rm "$thisdir/$check_file" &>/dev/null
       else
          echo "Error! Check \"$logfile\" for further details."
          exit $CODE_SLAVE_ERROR
