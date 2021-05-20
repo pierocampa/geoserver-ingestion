@@ -45,6 +45,7 @@ CODE_WRONG_USAGE=1
 CODE_UTILSFILE_NOT_FOUND=2
 CODE_GSFILE_NOT_FOUND=3
 CODE_CURL_NOT_INSTALLED=4
+CODE_GSLAYER_NOT_EXIST=5
 
 
 # store script dir
@@ -114,9 +115,18 @@ FTYPE_FILE="$GSLAYER.ftype.xml"
 #
 # run !
 #
-$CURL -u $GSUSER:$GSPWD \
+HTTPCODE=$( $CURL -u $GSUSER:$GSPWD \
+  -XGET -sS -o /dev/null -w "%{http_code}" \
+  "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml" )
+
+if [ $HTTPCODE -gt 400 ]; then
+   echo "(!) Layer does not exist: \"$GSLAYER\"".
+   exit $CODE_GSLAYER_NOT_EXIST
+
+else
+   $CURL -u $GSUSER:$GSPWD \
       -XGET -sS \
-      -H "$MIME_XML" \
       "$GSURL"/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml
+fi
 
 exit $CODE_OK

@@ -281,6 +281,8 @@ else
       -XGET -sS -o /dev/null -w "%{http_code}" \
       "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER.xml" )
 
+   # TODO: verify success of operation (the FTYPE might be invalid)
+
    if [ $HTTPCODE -gt 400 ]; then
       echo -n "Publishing layer \"$GSLAYER\" to GeoServer instance at $GSURL... "
       $DRY $CURL -sS -u $GSUSER:$GSPWD \

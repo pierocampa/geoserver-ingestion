@@ -22,18 +22,22 @@ ME="$( basename $0 )"
 UTILS_FILE="utils"
 INGEST_SCRIPT="ingest_shp"
 UNPUBL_SCRIPT="unpublish_shp"
+FETCH_FTYPE_SCRIPT="fetch_ftype"
 
 SH_EXT="sh"
 SHP_EXT="shp"
 SRID_EXT="srid"
+FTYPE_EXT="ftype.xml"
 
 LOAD_ACTIONS=( 'load' 'l' )
 PUBLISH_ACTIONS=( 'publish' 'p' )
 UNPUBLISH_ACTIONS=( 'unpublish' 'u' )
 DROP_ACTIONS=( 'drop' 'd' )
+SYNC_FTYPE_ACTIONS=( 'sync-ftype' 'sf' )
 
 OK_UPDATE_FILE="update"
 OK_DELETE_FILE="delete"
+OK_SYNC_FILE="sync"
 
 FORCE_ARGS=( '--force' '-f' )
 DRYRUN_ARGS=( '--dry-run' '-n' )
@@ -57,6 +61,9 @@ USAGE="\
       ${bold}[${DROP_ACTIONS[0]}, ${DROP_ACTIONS[1]}${normal}]
           Unpublish the GeoServer layers, then drop the data from the database.
 
+      ${bold}[${SYNC_FTYPE_ACTIONS[0]}, ${SYNC_FTYPE_ACTIONS[1]}${normal}]
+          Synchronizes the local feature type definition of a layer with that of the published layer.
+
   ${bold}FOLDER${normal}
       Root folder where to look for datasets to be managed.
       The script will identify a dataset by looking for any ${underline}.sh${normal} script
@@ -68,6 +75,9 @@ USAGE="\
 
           + ${bold}${UNPUBLISH_ACTIONS[1]}${normal} and ${bold}${DROP_ACTIONS[1]}${normal} actions will be executed
             if a file called ${underline}$OK_DELETE_FILE${normal} is found in the directory;
+
+          + ${bold}${SYNC_FTYPE_ACTIONS[1]}${normal} action will be executed
+            if a file called ${underline}$OK_SYNC_FILE${normal} is found in the directory;
 
       NOTE: use the ${bold}${FORCE_ARGS[0]}${normal} argument to force the execution of the
       action on all datasets.
@@ -144,10 +154,11 @@ fi
 ACTION="$1"
 shift
 case "$ACTION" in
-   ${LOAD_ACTIONS[0]}|${LOAD_ACTIONS[1]})           LOAD=1; ACTION="LOAD" ;;
-   ${PUBLISH_ACTIONS[0]}|${PUBLISH_ACTIONS[1]})     PUBL=1; ACTION="PUBLISH" ;;
-   ${UNPUBLISH_ACTIONS[0]}|${UNPUBLISH_ACTIONS[1]}) UNPB=1; ACTION="UNPUBLISH" ;;
-   ${DROP_ACTIONS[0]}|${DROP_ACTIONS[1]})           DROP=1; ACTION="DROP" ;;
+   ${LOAD_ACTIONS[0]}|${LOAD_ACTIONS[1]})              LOAD=1; ACTION="LOAD" ;;
+   ${PUBLISH_ACTIONS[0]}|${PUBLISH_ACTIONS[1]})        PUBL=1; ACTION="PUBLISH" ;;
+   ${UNPUBLISH_ACTIONS[0]}|${UNPUBLISH_ACTIONS[1]})    UNPB=1; ACTION="UNPUBLISH" ;;
+   ${DROP_ACTIONS[0]}|${DROP_ACTIONS[1]})              DROP=1; ACTION="DROP" ;;
+   ${SYNC_FTYPE_ACTIONS[0]}|${SYNC_FTYPE_ACTIONS[1]}) SYNF=1; ACTION="SYNC-FTYPE" ;;
    *) echo -e "(!) Invalid action \"$ACTION\"."
       echo "$USAGE"
       exit $CODE_WRONG_USAGE;;
@@ -158,7 +169,7 @@ ROOT_FOLDER="$1"
 shift
 if [ ! -d "$ROOT_FOLDER" ]; then
    echo "Folder \"$ROOT_FOLDER\" does not exist."
-   echo $USAGE
+   echo "$USAGE"
    exit $CODE_INVALID_FOLDER
 fi
 
@@ -192,6 +203,9 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
    shpnamepath="${shapepath%.*}"           # /path/to/ShapeFile
    shpname="$( basename "$shpnamepath" )"  # ShapeFile
    layername="$( lowercase "$shpname" )"   # shapefile
+   layernamepath="$( lowercase "$shpnamepath" )"   # /path/to/shapefile
+
+   logfile="$shpnamepath.log"
 
    thisdir="$( dirname "$shapepath" )"
    if [ "$thisdir" != "$lastdir" ]; then
@@ -232,6 +246,13 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
       name_arg="$layername"
       forward_args+=( "--drop" )
 
+   elif [ ! -z ${SYNF+x} ]; then
+      script=$FETCH_FTYPE_SCRIPT
+      check_file=$OK_SYNC_FILE
+      name_arg="$layername"
+      ftypefile="$layernamepath.$FTYPE_EXT"
+      post_rc_ok="cp \"$logfile\" \"$ftypefile\""
+
    else
       echo "Should not be here: bug!"
       exit 500
@@ -249,14 +270,15 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
    # execute:
    if [ $run -eq 0 -o $force -eq 0 ]; then
 
-      logfile="$shpnamepath.log"
       "$SOURCE_DIR/$script" "$name_arg" ${forward_args[@]} &> "$logfile"
 
       if [ $? -eq $CODE_OK ]; then
          echo "Done."
+         eval $post_rc_ok
          rm "$thisdir/$check_file" &>/dev/null
       else
          echo "Error! Check \"$logfile\" for further details."
+         eval $post_rc_fail
          exit $CODE_SLAVE_ERROR
       fi
 

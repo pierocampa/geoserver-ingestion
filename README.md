@@ -145,7 +145,7 @@ Prints this text.
 
 Bulk management of datasets under a given directory.
 
-It relies on the `ingest_shp` and `unpubl_shp` scripts (all additional arguments to a manage_dataset call are passed on to those scripts, e.g. you can append `--dry-run` for bulk dry-run on a folder).
+It relies on the `ingest_shp`, `unpubl_shp` and `fetch_type` slave scripts (all additional arguments to a manage_dataset call are passed on to those scripts, e.g. you can append `--dry-run` for bulk dry-run on a folder).
 
 Additionally it requires that all datasets aer accompained by a `.srid` file containing the EPSG code of the geospatial projection of the datasets to be used as `--srid` argument on slave scripts.  
 
@@ -168,12 +168,16 @@ Unpublish the GeoServer layers, but keep the data in the database.
 * **[drop, d]**  
 Unpublish the GeoServer layers, then drop the data from the database.
 
+* **[sync-ftype, sf]**  
+Synchronizes the local feature type definition of a layer with that of the published layer.
+
 **FOLDER**  
 Root folder where to look for datasets to be managed.
 The script will identify a dataset by looking for any .shp script under the directory, and will execute the action on the dataset based on the following conditions:
 
 1. **`l`** and **`p`** actions will be executed if a file called *`update`* is found in the directory;
 1. **`u`** and **`d`** actions will be executed if a file called *`delete`* is found in the directory;
+1. **`sf`** action will be executed if a file called *`sync`* is found in the directory;
 
 NOTE: use the **`--force`** argument to force the execution of the action on all datasets.
 
@@ -220,6 +224,9 @@ Prints this text.
 
 # Dry-run bulk unpublishing all marked layers from GeoServer:
 ./manage_datasets unpublish /data/root/folder/ --dry-run
+
+# Sync the local feature type definition of all marked datasets with the published version:
+./manage_datasets sf /data/root/folder
 ```
 
 ### Credits
