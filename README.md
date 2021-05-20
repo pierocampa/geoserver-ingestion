@@ -7,7 +7,7 @@
   * [ingest_shp](#ingest_shp)
   * [unpublish_shp](#unpublish_shp)
   * [manage_datasets](#manage_datasets)
-  * [fetch_type](#fetch_type)
+  * [fetch_ftype](#fetch_ftype)
 * [Examples](#examples)
 
 ## Content
@@ -145,7 +145,7 @@ Prints this text.
 
 Bulk management of datasets under a given directory.
 
-It relies on the `ingest_shp`, `unpubl_shp` and `fetch_type` slave scripts (all additional arguments to a manage_dataset call are passed on to those scripts, e.g. you can append `--dry-run` for bulk dry-run on a folder).
+It relies on the `ingest_shp`, `unpubl_shp` and `fetch_ftype` slave scripts (all additional arguments to a manage_dataset call are passed on to those scripts, e.g. you can append `--dry-run` for bulk dry-run on a folder).
 
 Additionally it requires that all datasets aer accompained by a `.srid` file containing the EPSG code of the geospatial projection of the datasets to be used as `--srid` argument on slave scripts.  
 
@@ -192,7 +192,7 @@ Dry run test: prints out commands without hitting the database nor GeoServer.
 Prints this text.
 
 
-### `fetch_type`
+### `fetch_ftype`
 
 Downloads the XML feature type description of a GeoServer layer.
 
