@@ -11,7 +11,7 @@ USAGE="$0 TARGET_DIR"
 ME="$( basename $0 )"
 
 scripts="
- manage_dataset
+ manage_datasets
  ingest_shp
  unpublish_shp
  fetch_ftype utils
