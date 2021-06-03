@@ -199,11 +199,12 @@ echo "Searching recursively for geospatial datasets inside \"$ROOT_FOLDER\"..."
 lastdir=""
 find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -r shapepath; do
 
-   shapefile="$( basename "$shapepath" )"  # /ShapeFile.shp
-   shpnamepath="${shapepath%.*}"           # /path/to/ShapeFile
-   shpname="$( basename "$shpnamepath" )"  # ShapeFile
-   layername="$( lowercase "$shpname" )"   # shapefile
-   layernamepath="$( lowercase "$shpnamepath" )"   # /path/to/shapefile
+   shapefile="$( basename "$shapepath" )"    # /ShapeFile.shp
+   shpnamepath="${shapepath%.*}"             # /path/to/ShapeFile
+   shapepath="$( dirname "$shapepath" )"     # /path/to
+   shpname="$( basename "$shpnamepath" )"    # ShapeFile
+   layername="$( lowercase "$shpname" )"     # shapefile
+   layernamepath="${shapepath}/${layername}" # /path/to/shapefile
 
    logfile="$shpnamepath.log"
 
@@ -250,7 +251,7 @@ find "$ROOT_FOLDER" -type f -name "*.$SHP_EXT" -print0 | while IFS= read -d '' -
       script=$FETCH_FTYPE_SCRIPT
       check_file=$OK_SYNC_FILE
       name_arg="$layername"
-      ftypefile="$layernamepath.$FTYPE_EXT"
+      ftypefile="$shpnamepath.$FTYPE_EXT"
       post_rc_ok="cp \"$logfile\" \"$ftypefile\""
 
    else
