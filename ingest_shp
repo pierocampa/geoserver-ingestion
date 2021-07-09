@@ -36,6 +36,7 @@ MIME_JSON="Content-type: text/json"
 ME="$( basename $0 )"
 SRID_ARGS=( '--srid' '-s' )
 PUBLISH_ARGS=( '--publish' '-p' )
+FORCE_ARGS=( '--force' '-f' )
 DRYRUN_ARGS=( '--dry-run' '-n' )
 HELP_ARGS=( '--help' '-h' )
 MIN_ARGS=3 # (help excluded)
@@ -58,6 +59,9 @@ USAGE="\
       See GeoServer REST API to see examples of feature type descriptions and styles, eg.:
       ${underline}https://GEOSERVER/rest/workspaces/{workspace}/datastores/{datastore}/featuretypes/{featuretype}.xml${normal}
       ${underline}https://GEOSERVER/rest/workspaces/{workspace}/styles/{style}.xml${normal}
+
+  ${bold}[${FORCE_ARGS[0]}, ${FORCE_ARGS[1]}]${normal}
+      Forces the data to be loaded into the database, even when previously existing.
 
   ${bold}[${DRYRUN_ARGS[0]}, ${DRYRUN_ARGS[1]}]${normal}
       Switches to dry run test: prints out commands without hitting the database nor GeoServer.
@@ -148,6 +152,7 @@ while [ $# -gt 0 ]; do
       ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
       ${SRID_ARGS[0]}|${SRID_ARGS[1]})  SRID="$2"; shift;;
       ${PUBLISH_ARGS[0]}|${PUBLISH_ARGS[1]})  GSPUBLISH=1 ;;
+      ${FORCE_ARGS[0]}|${FORCE_ARGS[1]})  FORCE=1 ;;
       ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";
                                             DRY_PIPE="tr '\n' ' ' | cat && echo " ;;
       *) echo -e "(!) Unknown argument \"$1\".\n$USAGE";
@@ -212,17 +217,22 @@ fi
 
 # check shapefile has not been ingested already
 PGTABLE=$( lowercase "$SHPFILE" )
-echo "SELECT * from $PGSCHEMA.\"$PGTABLE\" LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
-if [ $? -eq $CODE_OK ]; then
-   echo "(!) $SHPFILE table already exists in schema \"$PGSCHEMA\" of database \"$PGDATABASE\" ($PGHOST:$PGPORT): skipping ingestion."
+LOAD_DB=true
+if [ -z ${FORCE+x} ]; then
+   echo "SELECT * from $PGSCHEMA.\"$PGTABLE\" LIMIT 1" | $PSQL $PSQL_ERROR_STOP $PSQL_CONN >&/dev/null
+   if [ $? -eq $CODE_OK ]; then
+      echo "(!) $SHPFILE table already exists in schema \"$PGSCHEMA\" of database \"$PGDATABASE\" ($PGHOST:$PGPORT): skipping ingestion."
+      LOAD_DB=false
+   fi
+fi
 
-else
+if $LOAD_DB; then
    # ingest to PostGIS
    echo -n "Ingesting \"$SHPFILE\" (EPSG:$SRID) shapefile to database \"$PGDATABASE\" ($PGHOST:$PGPORT)... "
    #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$PGTABLE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
    if [ ! -z ${DRY+x} ]; then
-   echo "$SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
-         $SHP2PGSQL -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
+   echo "$SHP2PGSQL -d -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
+         $SHP2PGSQL -d -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
    fi
    echo "Done."
 fi
