@@ -93,6 +93,8 @@ CODE_XMLLINT_NOT_INSTALLED=11
 CODE_PSQL_NOT_INSTALLED=12
 CODE_PGIS_NOT_INSTALLED=13
 
+CODE_INTERNAL_ERROR=99
+
 
 # @inlcludes:
 if [ ! -f "$SCRIPT_DIR/$UTILS_FILE" ]; then
@@ -295,18 +297,25 @@ else
 
    if [ $HTTPCODE -gt 400 ]; then
       echo -n "Publishing layer \"$GSLAYER\" to GeoServer instance at $GSURL... "
-      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+      HTTPCODE=$( $DRY $CURL -sS -u $GSUSER:$GSPWD \
          -XPOST -H "$MIME_XML" \
+         -o /dev/null -w "%{http_code}" \
          -d @"$GSFTYPE" \
-         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes"
+         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes" )
       echo "Done."
    else
       echo -n "Updating layer \"$GSLAYER\" to GeoServer instance at $GSURL... "
-      $DRY $CURL -sS -u $GSUSER:$GSPWD \
+      HTTPCODE=$( $DRY $CURL -sS -u $GSUSER:$GSPWD \
          -XPUT -H "$MIME_XML" \
+         -o /dev/null -w "%{http_code}" \
          -d @"$GSFTYPE" \
-         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER" # TODO: ?recalculate=nativebbox,latlonbbox
+         "$GSURL/rest/workspaces/$GSWORKSPACE/datastores/$GSDATASTORE/featuretypes/$GSLAYER" ) # TODO: ?recalculate=nativebbox,latlonbbox
       echo "Done."
+   fi
+
+   if [ $HTTPCODE -gt 400 ]; then
+      echo "Error setting the layer metadata. HTTP response: $HTTPCODE".
+      exit $CODE_INTERNAL_ERROR
    fi
 
    # create/update style
