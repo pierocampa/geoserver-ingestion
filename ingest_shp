@@ -341,7 +341,7 @@ else
 
    # prepare POST body:
    JSONBODY="$( mktemp )"
-   echo "{ \"style\": { \"name\": \"$SLDNAME\", \"filename\": \"$GSSLD\" } }" > "$JSONBODY"
+   echo "{ \"style\": { \"name\": \"$SLDNAME\" } }" > "$JSONBODY"
 
    # set style as default for layer
    echo -n "Attaching the style \"$SLDNAME\" to the layer \"$GSLAYER\"... "
