@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Syncs the tree of EDP GeoServer/GeoNode layers permissions
+# to the deployment remote host.
+#
+# USAGE: $0 [OPTS]
+#
+# OPTS: arguments to be passed on to rsync (eg. ``-n'' for dry-run),
+#
+# @autho: pcampalani
+
+USER=pcampalani
+HOST=cssgeonode02
+WORKSPACE=EO_CDR
+TARGET_FOLDER=/home/$USER/geonode/perms
+
+RSYNC=$( which rsync )
+
+SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+$RSYNC -avz "$SCRIPT_DIR/perms/$WORKSPACE" "$USER@$HOST:$TARGET_FOLDER" "$@"

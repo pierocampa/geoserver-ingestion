@@ -1,0 +1,104 @@
+
+This folder contains the definition of the permissions
+to be set on the layers of EDP GeoNode instance for
+the EO/CDR research group.
+
+By default a new layer that gets imported from GeoServer
+to the EDP GeoNode with a single user owner:
+
+  $ python manage.py updatelayers [...] -u $OWNER
+
+To programmatically specify a more articulated set of 
+permissions, there is another command in the GeoNode suite
+of utilities:
+
+  $ python manage.py set_layers_permissions --help
+  usage: manage.py set_layers_permissions [-h] [--version] [-v {0,1,2,3}]
+                                          [--settings SETTINGS]
+                                          [--pythonpath PYTHONPATH]
+                                          [--traceback] [--no-color]
+                                          [--force-color]
+                                          [-r [RESOURCES [RESOURCES ...]]]
+                                          [-p PERMISSION]
+                                          [-u [USERS [USERS ...]]]
+                                          [-g [GROUPS [GROUPS ...]]] [-d]
+
+      Set/Unset permissions on layers for users and groups.
+      Arguments:
+          - users (-u, --users)
+          - groups (-g, --groups)
+          - resources (-r, --resources)
+          - permissions (-p, --permissions)
+          - delete (-d, --delete)
+      At least one user or one group is required.
+      If no resources are typed all the layers will be considered.
+      At least one permission must be typed.
+      Multiple inputs can be typed with white space separator.
+      To unset permissions use the '--delete (-d)' option.
+      To assign permissions to everyone (anonymous users), you will need to
+      add the following options: '-u AnonymousUser -g anonymous'
+
+
+A cronjob runs every N minutes on this host, in order to keep
+GeoServer and EDP GeoNode syncrhonized:
+
+   /opt/geonode/update_layers_cdr.sh
+
+In order to instruct this script on how to set the permissions
+to all layers, we decided to define a directory tree as follows:
+
+   ~pcampalani/geonode/perms/$WORKSPACE/$STORE/$PERM/$LAYER_NAME.perms
+
+being:
+
+   WORKSPACE : the GeoServer workspace
+   STORE     : the GeoServer store
+   PERM      : one among 'read', 'write', 'download', and 'owner'
+
+Each $PERM folder will contain at least two files:
+
+   users.default
+      The CSV list of default users to which to assign the $PERM
+   groups.default
+      The CSV list of default groups to which to assign the $PERM
+
+All .perms layers files with empty content in a given $PERM folder 
+will be set to the users/groups defined in the .default files.
+
+Otherwise, .perms layer file can define a specific users/groups permission
+assignment by setting one or both of:
+
+   U:user1[, user2[, ...]]
+   G:group1[, group2[, ...]]
+
+Hence a CSV list of users and groups, keyed by U: and G: respectively.
+
+Whenever a .perms file is defined, both users and groups defaults settings
+are ignored for that layer.
+
+If permissions file are empty, and there are no defaults set, no permission will be set on the layers.
+
+
+
+-- ANNEX: GeoNode permissions -------------------------------------------
+
+    READ_PERMISSIONS = [
+        'view_resourcebase'
+    ]
+    WRITE_PERMISSIONS = [
+        'change_layer_data',
+        'change_layer_style',
+        'change_resourcebase_metadata'
+    ]
+    DOWNLOAD_PERMISSIONS = [
+        'download_resourcebase'
+    ]
+    OWNER_PERMISSIONS = [
+        'change_resourcebase',
+        'delete_resourcebase',
+        'change_resourcebase_permissions',
+        'publish_resourcebase'
+    ]
+
+@see https://docs.geonode.org/en/master/admin/mgmt_commands/index.html#batch-sync-permissions
+-------------------------------------------------------------------------
