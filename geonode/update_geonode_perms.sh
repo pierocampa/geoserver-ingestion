@@ -30,9 +30,6 @@ PYTHONPATH='/opt/geonode' # TODO ignored by python
 MANAGE_PY="${PYTHONPATH}/manage.py"
 DJANGO_SETTINGS_MODULE='geonode.local_settings'
 
-WORKSPACE='EO_CDR'
-STORE_TRNSALP='eo_cdr_transalp'
-STORE_BURUNDI='eo_cdr_burundi'
 OWNER='pcampalani'
 PERMS_FOLDER="/home/pcampalani/geonode/perms"
 
@@ -41,8 +38,6 @@ PERMS_DEFAULTS_G='groups.default'
 PERMS_FILE_EXT='perms'
 PERMS_FILE_KEY_U='U:'
 PERMS_FILE_KEY_G='G:'
-
-store_test='eo_cdr_test'
 
 # style
 underline=`tput smul`
