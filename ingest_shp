@@ -31,7 +31,9 @@ FTYPE_EXT="ftype.xml"
 SLD_EXT="sld"
  MIME_XML="Content-type: text/xml"
 MIME_JSON="Content-type: text/json"
- MIME_SLD="Content-type: application/vnd.ogc.sld+xml"
+ MIME_SLD_100="Content-type: application/vnd.ogc.sld+xml"
+ MIME_SLD_110="Content-type: application/vnd.ogc.se+xml"  # SLD 1.1.0
+         # @see https://docs.geoserver.org/stable/en/user/rest/api/styles.html#rest-api-styles-post-put
 
 ME="$( basename $0 )"
 SRID_ARGS=( '--srid' '-s' )
@@ -92,6 +94,7 @@ CODE_CURL_NOT_INSTALLED=10
 CODE_XMLLINT_NOT_INSTALLED=11
 CODE_PSQL_NOT_INSTALLED=12
 CODE_PGIS_NOT_INSTALLED=13
+CODE_SLD_VERSION_UNKNOWN=14
 
 CODE_INTERNAL_ERROR=99
 
@@ -140,8 +143,8 @@ SHPFILE="$( basename "$SHPPATH" )"
 SHPDIR="$( dirname "$SHPPATH" )"
 if [ ! -f "$SHPPATH.shp" ]; then
    echo "\`\`$SHPPATH.shp'' not found."
-   echo "$USAGE"
-   exit $CODE_SHPFILE_NOT_FOUND
+   #echo "$USAGE"
+   #exit $CODE_SHPFILE_NOT_FOUND
 fi
 shift
 # see shapefile information
@@ -283,7 +286,7 @@ else
       echo "(!) SLD name (XPATH //NamedLayer/Name)) not found in \"$GSSLD\". Please check the SLD and retry."
       exit $CODE_SLDFILE_INVALID
    fi
-
+   SLDVERSION="$(  sed --quiet 's/<?xml.*version=\"\([0-9].[0-9].[0-9]\+\)\".*/\1/p' "$GSSLD" )"
 
    # GeoServer layer name is the same as the PostGIS table
    GSLAYER=$PGTABLE
@@ -323,10 +326,18 @@ else
       -XGET -sS -o /dev/null -w "%{http_code}" \
       "$GSURL/rest/workspaces/$GSWORKSPACE/styles/$SLDNAME.xml" )
 
+   # select SLD mime type:
+   case $SLDVERSION in
+       1.0.0) mime_sld="$MIME_SLD_100" ;;
+       1.1.0) mime_sld="$MIME_SLD_110" ;;
+       *) echo "(!) Unknown SLD version in ${GSSLD}: \"$SLDVERSION\"";
+          exit $CODE_SLD_VERSION_UNKNOWN ;;
+   esac
+
    if [ $HTTPCODE -gt 400 ]; then
       echo -n "Uploading style \"$GSSLD\"... "
       $DRY $CURL -sS -u $GSUSER:$GSPWD \
-         -XPOST -H "$MIME_SLD" \
+         -XPOST -H "$mime_sld" \
          -d @"$GSSLD" \
          "$GSURL/rest/workspaces/$GSWORKSPACE/styles?name=$SLDNAME"
       echo "Done."
