@@ -328,8 +328,8 @@ else
 
    # select SLD mime type:
    case $SLDVERSION in
-       1.0.0) mime_sld="$MIME_SLD_100" ;;
-       1.1.0) mime_sld="$MIME_SLD_110" ;;
+       1.0.0) MIME_SLD="$MIME_SLD_100" ;;
+       1.1.0) MIME_SLD="$MIME_SLD_110" ;;
        *) echo "(!) Unknown SLD version in ${GSSLD}: \"$SLDVERSION\"";
           exit $CODE_SLD_VERSION_UNKNOWN ;;
    esac
@@ -337,7 +337,7 @@ else
    if [ $HTTPCODE -gt 400 ]; then
       echo -n "Uploading style \"$GSSLD\"... "
       $DRY $CURL -sS -u $GSUSER:$GSPWD \
-         -XPOST -H "$mime_sld" \
+         -XPOST -H "$MIME_SLD" \
          -d @"$GSSLD" \
          "$GSURL/rest/workspaces/$GSWORKSPACE/styles?name=$SLDNAME"
       echo "Done."
