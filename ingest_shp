@@ -286,7 +286,7 @@ else
       echo "(!) SLD name (XPATH //NamedLayer/Name)) not found in \"$GSSLD\". Please check the SLD and retry."
       exit $CODE_SLDFILE_INVALID
    fi
-   SLDVERSION="$(  sed --quiet 's/<?xml.*version=\"\([0-9].[0-9].[0-9]\+\)\".*/\1/p' "$GSSLD" )"
+   SLDVERSION="$(  sed --quiet 's/.*version=\"\([0-9].[0-9].[0-9]\+\)\".*/\1/p' "$GSSLD" )"
 
    # GeoServer layer name is the same as the PostGIS table
    GSLAYER=$PGTABLE
