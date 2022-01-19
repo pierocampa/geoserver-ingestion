@@ -231,5 +231,5 @@ Prints this text.
 
 ### Credits
 
-[![EURAC Research](https://www.eurac.edu/Style%20Library/logoEURAC.jpg)](https://www.eurac.edu/en/pages/default.aspx)
+[EURAC Research](https://www.eurac.edu/)
 
