@@ -113,7 +113,7 @@ while [ $# -gt 0 ]; do
       ${WORKSPACE_ARGS[0]}|${WORKSPACE_ARGS[1]}) WORKSPACE="$2"; shift;;
       ${STORE_ARGS[0]}|${STORE_ARGS[1]}) STORE="$2"; shift;;
       ${FILTER_ARGS[0]}|${FILTER_ARGS[1]}) FILTER="$2"; shift;;
-      ${SYNC_ARGS[0]}|${SYNC_ARGS[1]}) SYNC="$2"; shift;;
+      ${SYNC_ARGS[0]}|${SYNC_ARGS[1]}) SYNC="sync" ;;
       ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
       ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";;
       *) echo -e "(!) Unknown argument \"$1\".\n$USAGE";
