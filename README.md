@@ -101,6 +101,9 @@ This can also be a path, but the extension of the file shall not be specified.
 **[--srid, -s] SRID**  
 The SRID code of the shapefile's projection.
 
+**[--enc, -W] CHAR_ENC**
+The character encoding of the input shapefile (default is UTF-8).
+
 **[--publish, -p]**  
 Option to publish the ingested feature to GeoServer datastore.  
 This requires that files `SHP_BASENAME.ftype.xml` and `SHP_BASENAME.sld` both exist.  
@@ -213,8 +216,8 @@ Prints this text.
 ## Examples
 
 ```sh
-# Load and publish a single shapefile:
-./ingest_shp Burundi_Pop --srid 32735 --publish
+# Load and publish a single shapefile whose charset is LATIN1:
+./ingest_shp Burundi_Pop --srid 32735 --publish -W LATIN1
 
 # Unpublish and purge a dataset, but keep style SLD definition in GeoServer catalog (note layer name is lower-case):
 ./unpublish_shp burundi_pop --drop --keep-style

@@ -34,15 +34,17 @@ MIME_JSON="Content-type: text/json"
  MIME_SLD_100="Content-type: application/vnd.ogc.sld+xml"
  MIME_SLD_110="Content-type: application/vnd.ogc.se+xml"  # SLD 1.1.0
          # @see https://docs.geoserver.org/stable/en/user/rest/api/styles.html#rest-api-styles-post-put
+DEFAULT_CHARENC='UTF-8'
 
 ME="$( basename $0 )"
 SRID_ARGS=( '--srid' '-s' )
+ENC_ARGS=( '--enc' '-W' )
 PUBLISH_ARGS=( '--publish' '-p' )
 FORCE_ARGS=( '--force' '-f' )
 DRYRUN_ARGS=( '--dry-run' '-n' )
 HELP_ARGS=( '--help' '-h' )
 MIN_ARGS=3 # (help excluded)
-MAX_ARGS=6 #   ''     ''
+MAX_ARGS=8 #   ''     ''
 USAGE="\
 
   ${bold}$ME${normal} ${underline}SHP_BASENAME${normal} ${SRID_ARGS[0]} ${underline}SRID${normal}\
@@ -54,6 +56,9 @@ USAGE="\
 
   ${bold}[${SRID_ARGS[0]}, ${SRID_ARGS[1]}] SRID${normal}
       The SRID code of the shapefile's projection.
+
+  ${bold}[${END_ARGS[0]}, ${END_ARGS[1]}] CHAR_ENC${normal}
+     The character encoding of the input shapefile (default is $DEFAULT_CHARENC).
 
   ${bold}[${PUBLISH_ARGS[0]}, ${PUBLISH_ARGS[1]}]${normal}
       Option to publish the ingested feature to GeoServer datastore.
@@ -152,10 +157,12 @@ shift
 
 
 # parse args
+CHARENC="$DEFAULT_CHARENC"
 while [ $# -gt 0 ]; do
    case "$1" in
       ${HELP_ARGS[0]}|${HELP_ARGS[1]})  echo "$USAGE"; exit $CODE_OK ;;
       ${SRID_ARGS[0]}|${SRID_ARGS[1]})  SRID="$2"; shift;;
+      ${ENC_ARGS[0]}|${ENC_ARGS[1]})  CHARENC="$2"; shift;;
       ${PUBLISH_ARGS[0]}|${PUBLISH_ARGS[1]})  GSPUBLISH=1 ;;
       ${FORCE_ARGS[0]}|${FORCE_ARGS[1]})  FORCE=1 ;;
       ${DRYRUN_ARGS[0]}|${DRYRUN_ARGS[1]})  DRY="echo ";
@@ -236,8 +243,8 @@ if $LOAD_DB; then
    echo -n "Ingesting \"$SHPFILE\" (EPSG:$SRID) shapefile to database \"$PGDATABASE\" ($PGHOST:$PGPORT)... "
    #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$PGTABLE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
    if [ ! -z ${DRY+x} ]; then
-   echo "$SHP2PGSQL -d -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
-         $SHP2PGSQL -d -s $SRID "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
+   echo "$SHP2PGSQL -d -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
+         $SHP2PGSQL -d -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
    fi
    echo "Done."
 fi
