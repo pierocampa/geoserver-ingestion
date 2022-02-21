@@ -243,8 +243,8 @@ if $LOAD_DB; then
    echo -n "Ingesting \"$SHPFILE\" (EPSG:$SRID) shapefile to database \"$PGDATABASE\" ($PGHOST:$PGPORT)... "
    #$DRY $SHP2PGSQL -s $SRID "$SHPFILE" "$PGSCHEMA"."$PGTABLE" | $DRY_PIPE $PSQL $PSQL_CONN #TODO
    if [ ! -z ${DRY+x} ]; then
-   echo "$SHP2PGSQL -d -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
-         $SHP2PGSQL -d -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
+   echo "$SHP2PGSQL -d -I -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN"; else
+         $SHP2PGSQL -d -I -s $SRID -W "$CHARENC" "$SHPPATH" "$PGSCHEMA"."$PGTABLE" | $PSQL $PSQL_CONN
    fi
    echo "Done."
 fi
